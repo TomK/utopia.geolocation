@@ -135,7 +135,7 @@ class GeoLocation {
 	public static function GeoIP($ip) {
 		$cached = self::GetCachedAddress($ip);
 		if ($cached !== FALSE) return $cached;
-echo 'nocache ip';
+		
 		$region = curl_get_contents('http://api.hostip.info/country.php?ip='.$ip);
 		if (strlen($region)>2 || $region == 'XX') $region = '';
 		//DebugMail('GeoIP Lookup',$region ? $region : 'Not Found');
