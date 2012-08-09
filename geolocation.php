@@ -97,7 +97,7 @@ class GeoLocation {
 		$ret = array(
 			$row['geometry']['location']['lat'],
 			$row['geometry']['location']['lng'],
-			isset($row['geometry']['bounds']) ? $row['geometry']['bounds'] : $row['geometry']['viewport'],
+			$row['geometry']['viewport'],
 			$row['formatted_address'],
 			$row
 		);
@@ -107,7 +107,9 @@ class GeoLocation {
 		return $ret;
 	}
 
-	public static function CalculateDistance($cPos,$sPos,$unit = 'M') {
+	public static $defaultUnit = 'M';
+	public static function CalculateDistance($cPos,$sPos,$unit = NULL) {
+		if ($unit === NULL) $unit = self::$defaultUnit;
 		if (!$cPos || !$sPos) return NULL;
 		if (is_string($cPos)) $cPos = GoogleMaps::GetPos($cPos);
 		if (is_string($sPos)) $sPos = GoogleMaps::GetPos($sPos);
@@ -135,7 +137,7 @@ class GeoLocation {
 	public static function GeoIP($ip) {
 		$cached = self::GetCachedAddress($ip);
 		if ($cached !== FALSE) return $cached;
-		
+
 		$region = curl_get_contents('http://api.hostip.info/country.php?ip='.$ip);
 		if (strlen($region)>2 || $region == 'XX') $region = '';
 		//DebugMail('GeoIP Lookup',$region ? $region : 'Not Found');
