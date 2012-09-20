@@ -7,7 +7,12 @@ class tabledef_GeoCache extends uTableDef {
 		$this->SetFieldProperty('update','extra','ON UPDATE CURRENT_TIMESTAMP');
 		$this->SetFieldProperty('update','default','current_timestamp');
 		$this->AddField('request',ftVARCHAR,100);
-		$this->AddField('response',ftLONGTEXT);
+		$this->AddField('lat',ftFLOAT,'10,6');
+		$this->AddField('lon',ftFLOAT,'10,6');
+		$this->AddField('sw_lat',ftFLOAT,'10,6');
+		$this->AddField('sw_lon',ftFLOAT,'10,6');
+		$this->AddField('ne_lat',ftFLOAT,'10,6');
+		$this->AddField('ne_lon',ftFLOAT,'10,6');
 
 		$this->SetPrimaryKey('geocache_id');
 		$this->SetIndexField('request');
@@ -24,22 +29,37 @@ class GeoLocation {
 		return max($fallback,self::CalculateDistance($points['southwest'],$points['northeast']));
 	}
 
-	public static function CacheAddress($address,$pos) {
+	public static function CacheAddress($address,$lat,$lon,$sw_lat,$sw_lon,$ne_lat,$ne_lon) {
 	//	if (!$address || !$pos) return FALSE;
 		$cache = self::GetCachedAddress($address,0);
 		if (!$cache)
-			$res = sql_query("INSERT INTO tabledef_GeoCache (`request`,`response`) VALUES ('".mysql_real_escape_string($address)."','".mysql_real_escape_string(json_encode($pos))."')");
+			$res = sql_query("INSERT INTO tabledef_GeoCache (`request`,`lat`,`lon`,`sw_lat`,`sw_lon`,`ne_lat`,`ne_lon`) VALUES (".
+				"'".mysql_real_escape_string($address)."',".
+				"'".mysql_real_escape_string($lat)."',".
+				"'".mysql_real_escape_string($lon)."',".
+				"'".mysql_real_escape_string($sw_lat)."',".
+				"'".mysql_real_escape_string($sw_lon)."',".
+				"'".mysql_real_escape_string($ne_lat)."',".
+				"'".mysql_real_escape_string($ne_lon)."')");
 		else
-			$res = sql_query("UPDATE tabledef_GeoCache SET `response` = '".mysql_real_escape_string(json_encode($pos))."', `update` = CURRENT_TIMESTAMP WHERE `request` = '".mysql_real_escape_string($address)."'");
+			$res = sql_query("UPDATE tabledef_GeoCache SET ".
+				"`lat` = '".mysql_real_escape_string($lat)."',".
+				"`lon` = '".mysql_real_escape_string($lon)."',".
+				"`sw_lat` = '".mysql_real_escape_string($sw_lat)."',".
+				"`sw_lon` = '".mysql_real_escape_string($sw_lon)."',".
+				"`ne_lat` = '".mysql_real_escape_string($ne_lat)."',".
+				"`ne_lon` = '".mysql_real_escape_string($ne_lon)."',".
+				"`update` = CURRENT_TIMESTAMP WHERE `request` = '".mysql_real_escape_string($address)."'");
 
 		return TRUE;
 	}
 	public static function GetCachedAddress($address,$expires=3) {
 		$expires = $expires && is_numeric($expires) ? ' AND SUBDATE(NOW(), INTERVAL '.$expires.' DAY) < `update`' : '';
-		$res = sql_query("SELECT * FROM tabledef_GeoCache WHERE `request` = '".mysql_real_escape_string($address)."'".$expires);
+		$res = sql_query("SELECT `lat`,`lon`,`sw_lat`,`sw_lon`,`ne_lat`,`ne_lon` FROM tabledef_GeoCache WHERE `request` = '".mysql_real_escape_string($address)."'".$expires);
 		if (!$res || !mysql_num_rows($res)) return FALSE;
-		$row = mysql_fetch_assoc($res);
-		return json_decode($row['response'],true);
+		$row = mysql_fetch_row($res);
+		if (!$row || !$row[0] || !$row[1] || !$row[2] || !$row[3] || !$row[4] || !$row[5]) return FALSE; // if any of the items are empty, refresh
+		return $row;
 	}
 
 	public static function GetPos($address,$region=true,$firstOnly = true,$dropPostCode=true) {
@@ -52,59 +72,50 @@ class GeoLocation {
 		}
 		if ($region == $address) $region = '';
 		if (!is_string($region)) $region = '';
-		else $region = ','.$region;
+		else $region = ', '.$region;
+		$address .= $region;
 
-		$cached = self::GetCachedAddress($address.$region,0); if ($cached !== FALSE) return $cached;
+		$cached = self::GetCachedAddress($address,0); if ($cached !== FALSE) return $cached;
 		
-		timer_start('GMaps Lookup: '.$address);
-		// trim letters from end of postcode
-
-		$r = $region ? '&region='.$region : ''; 
-
-		$out = curl_get_contents('http://maps.googleapis.com/maps/api/geocode/json?sensor=false&address='.urlencode($address).$r);
-
-		$arr = json_decode($out,true);
-		if (!$arr) return NULL;
-
-		switch ($arr['status']) {
-			case 'OK': break;
-			case 'ZERO_RESULTS':
-				self::CacheAddress($address.$region,'');
-				return FALSE;
-			default:
-				DebugMail('GMaps request not OK',$address."\n\n".print_r($arr,true));
-				return NULL;
-				break;
+		$result = false;
+		foreach (self::$callbacks as $callback) {
+			$result = call_user_func_array($callback,array($address));
+			if ($result) break;
 		}
+		if (!$result) return $result;
 		
-		$row = reset($arr['results']);
-		if (!$row) return NULL;
+		self::CacheAddress($address,$result[0],$result[1],$result[2],$result[3],$result[4],$result[5]);
+		return $result;
+	}
+	
+	private static $callbacks = array(array('GeoLocation','getLatLonGoogle'),array('GeoLocation','getLatLonYahoo'));
+	public static function RegisterCallback($callback) {
+		if (!is_callable($callback)) return FALSE;
+		self::$callbacks[] = $callback;
+		return TRUE;
+	}
+	
+	public static function getLatLonGoogle($address) {
+		//http://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=$address
+		$out = curl_get_contents('http://maps.googleapis.com/maps/api/geocode/xml?sensor=false&region=uk&address='.urlencode($address));
+		$xml = simplexml_load_string($out);
+		if (!$xml || (string)$xml->status !== 'OK') return FALSE;
 
-		// locality, administrative_area_level_2, administrative_area_level_1
-		$newFormattedAddress = array();
-		if ($row && isset($row['address_components'])) {
-			foreach($row['address_components'] as $c) {
-				if (/*!isset($newFormattedAddress[0]) &&*/ array_search('locality',$c['types']) !== FALSE)
-					$newFormattedAddress[0] = $c['long_name'];
-                                if (/*!isset($newFormattedAddress[1]) &&*/ array_search('administrative_area_level_2',$c['types']) !== FALSE)
-                                        $newFormattedAddress[1] = $c['long_name'];
-                                if (/*!isset($newFormattedAddress[2]) &&*/ array_search('administrative_area_level_1',$c['types']) !== FALSE)
-                                        $newFormattedAddress[2] = $c['long_name'];
-			}
-		}
-		if (count($newFormattedAddress) >= 2) $row['formatted_address'] = implode(', ',$newFormattedAddress);
+		return array(
+			(float)$xml->result->geometry->location->lat, (float)$xml->result->geometry->location->lng,
+			(float)$xml->result->geometry->viewport->southwest->lat, (float)$xml->result->geometry->viewport->southwest->lng,
+			(float)$xml->result->geometry->viewport->northeast->lat, (float)$xml->result->geometry->viewport->northeast->lng);
+	}
+	public static function getLatLonYahoo($address) {
+		//http://where.yahooapis.com/geocode?q=1600+Pennsylvania+Avenue,+Washington,+DC&appid=[yourappidhere]
+		$out = curl_get_contents('http://where.yahooapis.com/geocode?appid=aa6sMN6k&flags=X&q='.urlencode($address));
+		$xml = simplexml_load_string($out);
+		if (!$xml || $xml->Found == 0) return FALSE;
 
-		$ret = array(
-			$row['geometry']['location']['lat'],
-			$row['geometry']['location']['lng'],
-			$row['geometry']['viewport'],
-			$row['formatted_address'],
-			$row
-		);
-		
-		self::CacheAddress($address.$region,$ret);
-		self::CacheAddress($ret[3].$region,$ret);
-		return $ret;
+		return array(
+			(float)$xml->Result->latitude, (float)$xml->Result->longitude,
+			(float)$xml->Result->boundingbox->south, (float)$xml->Result->boundingbox->west,
+			(float)$xml->Result->boundingbox->north, (float)$xml->Result->boundingbox->east);
 	}
 
 	public static $defaultUnit = 'M';
