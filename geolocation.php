@@ -67,8 +67,7 @@ class GeoLocation {
 		$address = trim($address);
 		if (empty($address)) return NULL;
 		if ($region === TRUE) {
-			$region = self::GeoIP($_SERVER['REMOTE_ADDR']);
-			if (!$region) $region = modOpts::GetOption('geolocation_default_region');
+			$region = modOpts::GetOption('geolocation_default_region');
 		}
 		if ($region == $address) $region = '';
 		if (!is_string($region)) $region = '';
@@ -143,17 +142,5 @@ class GeoLocation {
 		}
 
 		return $miles;
-	}
-
-	public static function GeoIP($ip) {
-		$cached = self::GetCachedAddress($ip);
-		if ($cached !== FALSE) return $cached;
-
-		$region = curl_get_contents('http://api.hostip.info/country.php?ip='.$ip);
-		if (strlen($region)>2 || $region == 'XX') $region = '';
-		//DebugMail('GeoIP Lookup',$region ? $region : 'Not Found');
-
-		self::CacheAddress($ip,$region);
-		return $region;
 	}
 }
