@@ -62,17 +62,10 @@ class GeoLocation {
 		return $row;
 	}
 
-	public static function GetPos($address,$region=true,$firstOnly = true,$dropPostCode=true) {
+	public static function GetPos($address) {
 		if (is_array($address)) return $address;
 		$address = trim($address);
 		if (empty($address)) return NULL;
-		if ($region === TRUE) {
-			$region = modOpts::GetOption('geolocation_default_region');
-		}
-		if ($region == $address) $region = '';
-		if (!is_string($region)) $region = '';
-		else $region = ', '.$region;
-		$address .= $region;
 
 		$cached = self::GetCachedAddress($address,0); if ($cached !== FALSE) return $cached;
 		
@@ -96,7 +89,9 @@ class GeoLocation {
 	
 	public static function getLatLonGoogle($address) {
 		//http://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=$address
-		$out = curl_get_contents('http://maps.googleapis.com/maps/api/geocode/xml?sensor=false&region=uk&address='.urlencode($address));
+		$region = modOpts::GetOption('geolocation_default_region');
+		if ($region) $region = "&region=$region";
+		$out = curl_get_contents('http://maps.googleapis.com/maps/api/geocode/xml?sensor=false'.$region.'&address='.urlencode($address));
 		$xml = simplexml_load_string($out);
 		if (!$xml || (string)$xml->status !== 'OK') return FALSE;
 
@@ -107,7 +102,9 @@ class GeoLocation {
 	}
 	public static function getLatLonYahoo($address) {
 		//http://where.yahooapis.com/geocode?q=1600+Pennsylvania+Avenue,+Washington,+DC&appid=[yourappidhere]
-		$out = curl_get_contents('http://where.yahooapis.com/geocode?appid=aa6sMN6k&flags=X&q='.urlencode($address));
+		$region = modOpts::GetOption('geolocation_default_region');
+		if ($region) $region = "&locale=$region";
+		$out = curl_get_contents('http://where.yahooapis.com/geocode?appid=aa6sMN6k&flags=X'.$region.'&q='.urlencode($address));
 		$xml = simplexml_load_string($out);
 		if (!$xml || $xml->Found == 0) return FALSE;
 
