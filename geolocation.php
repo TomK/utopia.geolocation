@@ -71,7 +71,9 @@ class GeoLocation {
 		
 		$result = false;
 		foreach (self::$callbacks as $callback) {
-			$result = call_user_func_array($callback,array($address));
+			try {
+				$result = call_user_func_array($callback,array($address));
+			} catch (Exception $e) {}
 			if ($result) break;
 		}
 		if (!$result) return $result;
