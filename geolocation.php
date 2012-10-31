@@ -33,31 +33,18 @@ class GeoLocation {
 	//	if (!$address || !$pos) return FALSE;
 		$cache = self::GetCachedAddress($address,0);
 		if (!$cache)
-			$res = sql_query("INSERT INTO tabledef_GeoCache (`request`,`lat`,`lon`,`sw_lat`,`sw_lon`,`ne_lat`,`ne_lon`) VALUES (".
-				"'".mysql_real_escape_string($address)."',".
-				"'".mysql_real_escape_string($lat)."',".
-				"'".mysql_real_escape_string($lon)."',".
-				"'".mysql_real_escape_string($sw_lat)."',".
-				"'".mysql_real_escape_string($sw_lon)."',".
-				"'".mysql_real_escape_string($ne_lat)."',".
-				"'".mysql_real_escape_string($ne_lon)."')");
+			$res = database::query('INSERT INTO tabledef_GeoCache (`request`,`lat`,`lon`,`sw_lat`,`sw_lon`,`ne_lat`,`ne_lon`) VALUES (?,?,?,?,?,?,?)',
+				array($address, $lat, $lon, $sw_lat, $sw_lon, $ne_lat, $ne_lon));
 		else
-			$res = sql_query("UPDATE tabledef_GeoCache SET ".
-				"`lat` = '".mysql_real_escape_string($lat)."',".
-				"`lon` = '".mysql_real_escape_string($lon)."',".
-				"`sw_lat` = '".mysql_real_escape_string($sw_lat)."',".
-				"`sw_lon` = '".mysql_real_escape_string($sw_lon)."',".
-				"`ne_lat` = '".mysql_real_escape_string($ne_lat)."',".
-				"`ne_lon` = '".mysql_real_escape_string($ne_lon)."',".
-				"`update` = CURRENT_TIMESTAMP WHERE `request` = '".mysql_real_escape_string($address)."'");
+			$res = database::query('UPDATE tabledef_GeoCache SET `lat` = ?, `lon` = ?, `sw_lat` = ?, `sw_lon` = ?, `ne_lat` = ?, `ne_lon` = ?, `update` = CURRENT_TIMESTAMP WHERE `request` = ?',
+				array($lat, $lon, $sw_lat, $sw_lon, $ne_lat, $ne_lon, $address));
 
 		return TRUE;
 	}
 	public static function GetCachedAddress($address,$expires=3) {
 		$expires = $expires && is_numeric($expires) ? ' AND SUBDATE(NOW(), INTERVAL '.$expires.' DAY) < `update`' : '';
-		$res = sql_query("SELECT `lat`,`lon`,`sw_lat`,`sw_lon`,`ne_lat`,`ne_lon` FROM tabledef_GeoCache WHERE `request` = '".mysql_real_escape_string($address)."'".$expires);
-		if (!$res || !mysql_num_rows($res)) return FALSE;
-		$row = mysql_fetch_row($res);
+		$res = database::query('SELECT `lat`,`lon`,`sw_lat`,`sw_lon`,`ne_lat`,`ne_lon` FROM tabledef_GeoCache WHERE `request` = ?'.$expires,array($address));
+		if (!$res || !($row = $res->fetch(PDO::FETCH_NUM))) return FALSE;
 		if (!$row || !$row[0] || !$row[1] || !$row[2] || !$row[3] || !$row[4] || !$row[5]) return FALSE; // if any of the items are empty, refresh
 		return $row;
 	}
