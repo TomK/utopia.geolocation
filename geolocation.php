@@ -17,6 +17,17 @@ class tabledef_GeoCache extends uTableDef {
 		$this->SetPrimaryKey('geocache_id');
 		$this->SetIndexField('request');
 	}
+	protected $customscript = '
+		DROP FUNCTION IF EXISTS CalculateDistance;
+		CREATE FUNCTION CalculateDistance (lat1 float, lon1 float, lat2 float, lon2 float)
+			RETURNS float
+			DETERMINISTIC
+			COMMENT \'Geolocation distance between two lat/lon points\'
+		BEGIN
+			DECLARE result float;
+			SET result = 3956 * 2 * ASIN(SQRT( POWER(SIN((lat1 -lat2) * pi()/180 / 2), 2) + COS(lat1 * pi()/180) * COS(lat2 * pi()/180) * POWER(SIN((lon1 -lon2) * pi()/180 / 2), 2) ));
+			RETURN result;
+		END';
 }
 
 uEvents::AddCallback('InitComplete','GeoLocation::Init');
