@@ -68,7 +68,7 @@ class GeoLocation {
 		$address = trim($address);
 		if (empty($address)) return NULL;
 
-		$cached = self::GetCachedAddress($address,0); if ($cached !== FALSE) return $cached;
+		$cached = self::GetCachedAddress($address,5); if ($cached !== FALSE) return $cached;
 		
 		$result = false;
 		foreach (self::$callbacks as $callback) {
