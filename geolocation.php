@@ -121,8 +121,8 @@ class GeoLocation {
 	public static function CalculateDistance($cPos,$sPos,$unit = NULL) {
 		if ($unit === NULL) $unit = self::$defaultUnit;
 		if (!$cPos || !$sPos) return NULL;
-		if (is_string($cPos)) $cPos = GoogleMaps::GetPos($cPos);
-		if (is_string($sPos)) $sPos = GoogleMaps::GetPos($sPos);
+		if (is_string($cPos)) $cPos = self::GetPos($cPos);
+		if (is_string($sPos)) $sPos = self::GetPos($sPos);
 		list($lat1,$lon1) = array_values($cPos);
 		list($lat2,$lon2) = array_values($sPos);
 
