@@ -33,10 +33,10 @@ class tabledef_GeoCache extends uTableDef {
 		END';
 }
 
-uEvents::AddCallback('InitComplete','GeoLocation::Init');
+uEvents::AddCallback('AfterInit','GeoLocation::Init');
 class GeoLocation {
 	public static function Init() {
-		modOpts::AddOption('geolocation_default_region','Default Region','GeoLocation',$init='UK',$fieldType=itTEXT,$values=NULL);
+		modOpts::AddOption('geolocation_default_region','Default Region','GeoLocation','UK',itTEXT);
 	}
 	public static function GetThreshold($points,$fallback = 50) {
 		if (!$points) return $fallback;
@@ -94,14 +94,14 @@ class GeoLocation {
 		//http://maps.googleapis.com/maps/api/geocode/json?sensor=false&address=$address
 		$region = modOpts::GetOption('geolocation_default_region');
 		if ($region) $region = "&region=$region";
-		$out = curl_get_contents('http://maps.googleapis.com/maps/api/geocode/xml?sensor=false'.$region.'&address='.urlencode($address));
-		$xml = simplexml_load_string($out);
-		if (!$xml || (string)$xml->status !== 'OK') return FALSE;
-
+		$out = curl_get_contents('http://maps.googleapis.com/maps/api/geocode/json?sensor=false'.$region.'&address='.urlencode($address));
+		$json = json_decode($out,true);
+		if (!$json || (string)$json['status'] !== 'OK') return FALSE;
+		$first = $json['results'][0];
 		return array(
-			(float)$xml->result->geometry->location->lat, (float)$xml->result->geometry->location->lng,
-			(float)$xml->result->geometry->viewport->southwest->lat, (float)$xml->result->geometry->viewport->southwest->lng,
-			(float)$xml->result->geometry->viewport->northeast->lat, (float)$xml->result->geometry->viewport->northeast->lng);
+			(float)$first['geometry']['location']['lat'], (float)$first['geometry']['location']['lng'],
+			(float)$first['geometry']['viewport']['southwest']['lat'], (float)$first['geometry']['viewport']['southwest']['lng'],
+			(float)$first['geometry']['viewport']['northeast']['lat'], (float)$first['geometry']['viewport']['northeast']['lng']);
 	}
 	public static function getLatLonYahoo($address) {
 		//http://where.yahooapis.com/geocode?q=1600+Pennsylvania+Avenue,+Washington,+DC&appid=[yourappidhere]
